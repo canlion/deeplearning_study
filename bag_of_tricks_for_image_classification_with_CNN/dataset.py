@@ -1,9 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
-import matplotlib.pyplot as plt
 import cv2
-import pdb
 
 
 class ImagenetDataset:
@@ -72,7 +70,6 @@ class ImagenetDataset:
         :param img: 3D-array / (h, w, c) - 이미지
         :return: 3D-array / crop된 이미지
         """
-
         shape = tf.cast(tf.shape(img), tf.float32)
         h, w = shape[0], shape[1]
         area = h * w
@@ -116,7 +113,6 @@ class ImagenetDataset:
         :param img: 4D-array / (batch_size, h, w, ch) - 이미지 batch
         :return: 4D-array / augmented image (same shape as img)
         """
-
         # flip, hue, brightness, saturation
         img_aug = tf.image.random_flip_left_right(img)
         img_aug = tf.image.random_hue(img_aug, .4)
