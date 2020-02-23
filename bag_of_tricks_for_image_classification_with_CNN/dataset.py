@@ -5,13 +5,13 @@ import cv2
 
 
 class ImagenetDataset:
-    def __init__(self, d_dir):
+    def __init__(self, d_dir, ds_name='imagenet2012', print_info=False, label_depth=1000):
         """
         imagenet 데이터셋 생성
 
         :param d_dir: str / 이미지넷 데이터셋 저장 위치
         """
-        ds, info = tfds.load(name='imagenet2012', data_dir=d_dir, with_info=True)
+        ds, info = tfds.load(name=ds_name, data_dir=d_dir, with_info=True)
         self.train_ds, self.valid_ds = ds['train'], ds['validation']
 
         self.eigval = tf.constant([55.46, 4.794, 1.148])
@@ -24,7 +24,10 @@ class ImagenetDataset:
         self.train_num = info.splits['train'].num_examples
         self.valid_num = info.splits['validation'].num_examples
 
-        print(info)
+        self.depth = label_depth
+
+        if print_info:
+            print(info)
 
     def get_train_ds(self, batch_size):
         """train 데이터셋 생성"""
@@ -57,7 +60,7 @@ class ImagenetDataset:
         """
         if is_train:
             img = self._image_agumentation(img)
-        label = tf.one_hot(label, depth=1000)
+        label = tf.one_hot(label, depth=self.depth)
 
         return img, label
 
@@ -86,7 +89,7 @@ class ImagenetDataset:
         img_crop = tf.image.random_crop(img, size=[h_crop, w_crop, 3])
         img_resize = tf.image.resize(img_crop, [224, 224])
 
-        return img_resize
+        return tf.squeeze(img_resize)
 
     def _image_crop_valid(self, img):
         """
@@ -103,7 +106,7 @@ class ImagenetDataset:
         img_crop = tf.image.resize_with_crop_or_pad(img, 224, 224)
         img_normalize = (img_crop - self.mean) / self.std
 
-        return img_normalize
+        return tf.squeeze(img_normalize)
 
     def _image_agumentation(self, img):
         """
@@ -142,5 +145,5 @@ class ImagenetDataset:
 
 if __name__ == '__main__':
     # tf.config.experimental_run_functions_eagerly(True)
-    inds = ImagenetDataset('/tf_datasets')
-    inds.print_example()
+    inds = ImagenetDataset('/tf_datasets', ds_name='imagenette/full-size', print_info=True)
+    # inds.print_example()
