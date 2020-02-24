@@ -82,8 +82,8 @@ class ImagenetDataset:
         while tf.logical_and(tf.less(h, h_crop), tf.less(w, w_crop)):
             aspect_ratio = tf.random.uniform([], 3 / 4, 4 / 3)
             area_ratio = tf.random.uniform([], 1 / 12.5, 1.)
-            area = tf.multiply(area, area_ratio)
-            h_crop = tf.sqrt(area / aspect_ratio)
+            area_target = tf.multiply(area, area_ratio)
+            h_crop = tf.sqrt(area_target / aspect_ratio)
             w_crop = h_crop * aspect_ratio
 
         img_crop = tf.image.random_crop(img, size=[h_crop, w_crop, 3])
