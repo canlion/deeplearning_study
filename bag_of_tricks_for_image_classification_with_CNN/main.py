@@ -1,13 +1,16 @@
 import tensorflow as tf
-from dataset import ImagenetDataset
-from network import Resnet50
+from dataset import ImagenetDataset, CifarDataset
+from network import Resnet_Cifar, Resnet_Cifar_Tweak
+from datetime import datetime
+from utils import WarmupExponential, WarmupCosineLRDecay, mix_up, label_smoothing
 import shutil
 import os
 import time
+import math
 
 
-# const.
-BATCH_SIZE = 128
+# constant
+BATCH_SIZE = 512
 EPOCHS = 120
 
 
@@ -35,13 +38,39 @@ def valid_network(x, y):
 
 
 # dataset
-imagenet_ds = ImagenetDataset('/tf_datasets')
-train_size = imagenet_ds.train_num
-train_ds = imagenet_ds.get_train_ds(BATCH_SIZE)
-valid_ds = imagenet_ds.get_valid_ds(BATCH_SIZE)
+ds = CifarDataset('/tf_datasets', ds_name='cifar10')
+train_size = ds.train_num
+train_ds = ds.get_train_ds(BATCH_SIZE)
+valid_ds = ds.get_valid_ds(BATCH_SIZE)
 
-# network
-model = Resnet50()
+
+step_per_epoch = math.ceil(train_size / BATCH_SIZE)
+# base
+# model = Resnet_Cifar(category=10)
+# lr = tf.keras.optimizers.schedules.ExponentialDecay(1e-1, math.ceil(train_size / BATCH_SIZE) * 30, .1, True)
+# optimizer = tf.keras.optimizers.SGD(learning_rate=lr, momentum=.9)
+
+# efficient
+# linear scaling & lr warmup & zero gamma & no bias decay
+# model = Resnet_Cifar(category=10, bn_gamma='zeros', bias_regularizer=None)
+# lr = WarmupExponential(2e-1, step_per_epoch * 5, step_per_epoch * 30, .1, True)
+# optimizer = tf.keras.optimizers.SGD(learning_rate=lr, momentum=.9)
+
+# network tweak
+# resnet-D
+# model = Resnet_Cifar_Tweak(category=10, bn_gamma='zeros', bias_regularizer=None)
+# lr = WarmupExponential(2e-1, step_per_epoch * 30, .1, True, step_per_epoch * 5)
+# optimizer = tf.keras.optimizers.SGD(learning_rate=lr, momentum=.9)
+
+# training refinements
+# cosine lr / 120 epochs
+model = Resnet_Cifar_Tweak(category=10, bn_gamma='zeros', bias_regularizer=None)
+lr = WarmupCosineLRDecay(2e-1, step_per_epoch * EPOCHS, step_per_epoch * 10)
+optimizer = tf.keras.optimizers.SGD(learning_rate=lr, momentum=.9)
+
+
+model.build((None, 224, 224, 3))
+model.summary()
 
 # loss & metric
 loss_obj = tf.keras.losses.CategoricalCrossentropy()
@@ -52,12 +81,10 @@ valid_loss_mean = tf.keras.metrics.Mean(name='valid_loss')
 top_1_acc = tf.keras.metrics.TopKCategoricalAccuracy(k=1, name='top_1_acc')
 top_5_acc = tf.keras.metrics.TopKCategoricalAccuracy(k=5, name='top_5_acc')
 
-# lr & optimizer
-lr = tf.keras.optimizers.schedules.ExponentialDecay(1e-1, (train_size // BATCH_SIZE) * 30, .1, True)
-optimizer = tf.keras.optimizers.SGD(learning_rate=lr, nesterov=True)
 
 # tensorboard
-log_dir = './logs'
+now = datetime.now()
+log_dir = './tensorboard/training_refinement-1-{}'.format(now.strftime("%Y%m%d-%H%M%S"))
 shutil.rmtree(os.path.join(log_dir, '*'), ignore_errors=True)
 
 train_loss_log_dir = os.path.join(log_dir, 'train_loss')
@@ -72,6 +99,7 @@ valid_loss_writer = tf.summary.create_file_writer(valid_loss_log_dir)
 top_1_writer = tf.summary.create_file_writer(top_1_log_dir)
 top_5_writer = tf.summary.create_file_writer(top_5_log_dir)
 
+# train
 report_format = """\
 {} epoch - t_loss : {:.3f} / t_l2_loss : {:.3f} / v_loss : {:.3f}
            top_1 : {:.3f} / top_5 :{:.3f} - time : {}"""
@@ -85,6 +113,10 @@ for epoch in range(EPOCHS):
 
     t_start = time.time()
     for img, label in train_ds:
+        # training refinement - start
+        label_smooth = label_smoothing(label)
+        img, label = mix_up(img, label_smooth)
+        # training refinement - end
         train_network(img, label)
     with train_loss_writer.as_default():
         tf.summary.scalar('loss', train_loss_mean.result(), step=epoch)
@@ -92,6 +124,9 @@ for epoch in range(EPOCHS):
         tf.summary.scalar('loss', train_l2_loss_mean.result(), step=epoch)
 
     for img, label in valid_ds:
+        # training refinement - start
+        label = label_smoothing(label)
+        # training refinement - end
         valid_network(img, label)
     with valid_loss_writer.as_default():
         tf.summary.scalar('loss', valid_loss_mean.result(), step=epoch)
