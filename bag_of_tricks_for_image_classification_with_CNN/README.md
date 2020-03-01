@@ -9,6 +9,8 @@
 ## 따라해보기
 * cifar10 데이터셋
 * 47 레이어 resnet 네트워크
+* batch size : 256
+* initial lr : .1 (exponential decay - rate : .1 / 30, 60, 90 epoch 마다 감소)
  
 ### 제시된 트릭들
 * efficient training
@@ -29,3 +31,6 @@
   * mixup training - 적용
   
 ### 결과
+![acc graph](tricks_result.png)
+
+많은 트릭들을 중첩시켰을때 베이스보다 약 4% 성능 향상
