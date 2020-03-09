@@ -4,6 +4,7 @@ paper : https://arxiv.org/pdf/1710.03740.pdf
 nvidia - Training with Mixed Precision : https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html
 
 ## Tensorflow mixed precision training
+https://www.tensorflow.org/guide/keras/mixed_precision
 ```python
 @tf.function
 def train_network_mp(x, y):
