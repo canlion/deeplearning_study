@@ -11,19 +11,16 @@ import argparse
 from dataset import VOCDatasetYOLOv1
 from loss import YOLOv1Loss
 from utils import WarmupCosineLRDecay, LRWarmup
-from network import YOLOv1
+from network import YoloV1MobilenetV2 as YoloV1
 
 
-IN_MEAN = tf.constant([0.485, 0.456, 0.406], shape=(1, 1, 1, 3))
-IN_STD = tf.constant([0.229, 0.224, 0.225], shape=(1, 1, 1, 3))
+IN_MEAN = tf.constant([123.68, 116.779, 103.939], shape=(1, 1, 1, 3))
+IN_STD = tf.constant([58.393, 57.12, 57.375], shape=(1, 1, 1, 3))
 
 
 @tf.function
 def normalization(img):
-    img /= 255.
-    img -= IN_MEAN
-    img /= IN_STD
-    return img
+    return (img-IN_MEAN)/IN_STD
 
 
 @tf.function
@@ -65,13 +62,14 @@ def valid_network(x, y):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch', default=16, type=int, help='batch size.')
+    parser.add_argument('--batch', default=64, type=int, help='batch size.')
     # parser.add_argument('--init_lr', default=1e-3, type=float, help='initial learning rate.')
-    parser.add_argument('--epochs', default=100, type=int, help='total training epochs.')
-    parser.add_argument('--lr_list', default=[1e-3, 1e-4, 1e-5], help='lr list', nargs='*')
-    parser.add_argument('--epochs_list', default=[40, 70], help='lr decay epochs.', nargs='*')
+    parser.add_argument('--epochs', default=135, type=int, help='total training epochs.')
+    parser.add_argument('--lr_list', default=[1e-4, 1e-5, 1e-6], help='lr list', nargs='*')
+    parser.add_argument('--epochs_list', default=[10, 20], help='lr decay epochs.', nargs='*')
     parser.add_argument('--mode', choices=['normal', 'mixed_precision'], default='normal',
                         help='training mode, "normal" or "mixed_precision".')
+    parser.add_argument('--warmup_start_lr', default=1e-5, type=float, help='init lr of warmup of learning rate.')
     parser.add_argument('--warmup_epochs', default=1, type=int, help='epochs of warmup of learning rate.')
     args = parser.parse_args()
 
@@ -87,8 +85,9 @@ if __name__ == '__main__':
     step_list = [step_per_epoch * i for i in args.epochs_list]
     print(args.lr_list, step_list)
     lr = tf.keras.optimizers.schedules.PiecewiseConstantDecay(step_list, args.lr_list)
-    lr = LRWarmup(lr, args.warmup_epochs * step_per_epoch)
+    lr = LRWarmup(lr, args.warmup_epochs * step_per_epoch, args.warmup_start_lr)
     optimizer = tf.keras.optimizers.SGD(learning_rate=lr, momentum=.9)
+    # optimizer = tf.keras.optimizers.Adam(lr)
 
     # loss & metric
     loss_obj = YOLOv1Loss()
@@ -105,7 +104,11 @@ if __name__ == '__main__':
         optimizer = tf.keras.mixed_precision.experimental.LossScaleOptimizer(optimizer, "dynamic")
 
     # network
-    model = YOLOv1()
+    model = YoloV1()
+    model.build((args.batch, 448, 448, 3))
+    model.summary()
+    # model.load_weights('backbone_w/min_loss_model_w')
+
 
     # tensorboard
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -148,7 +151,8 @@ if __name__ == '__main__':
         v_end = time.time()
 
         if (loss_min is None) or valid_loss.result() < loss_min:
-            model.save('yolo_save/yolo_min_loss', save_format='tf')
+            # model.save('yolo_save/yolo_min_loss', save_format='tf')
+            model.save_weights('yolo_save/yolo_min_loss_w')
             loss_min = valid_loss.result()
 
         print(report_format.format(epoch, train_loss.result(), valid_loss.result(),

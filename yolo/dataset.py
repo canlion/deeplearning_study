@@ -4,9 +4,6 @@ import numpy as np
 
     
 class VOCDatasetYOLOv1:
-    mean = tf.constant([0.485, 0.456, 0.406])
-    std = tf.constant([0.229, 0.224, 0.225])
-
     def __init__(self, d_dir, valid_year, img_size=448, S=7, B=2, bbox_minimum=.025, aug=False):
         """
         tensorflow-datasets의 VOC 데이터셋 다운로드 및 데이터셋 객체 생성
@@ -105,10 +102,10 @@ class VOCDatasetYOLOv1:
             grid_x, grid_y = int(grid_x), int(grid_y)
             
             # 차례로 바운딩박스 중심, 가로세로, 오브젝트존재여부, 클래스 one-hot
-            grid[grid_y, grid_x, 0] = cx * self.S
-            grid[grid_y, grid_x, 1] = cy * self.S
-            grid[grid_y, grid_x, 2] = w
-            grid[grid_y, grid_x, 3] = h
+            grid[grid_y, grid_x, 0] = cx
+            grid[grid_y, grid_x, 1] = cy
+            grid[grid_y, grid_x, 2] = np.sqrt(w)
+            grid[grid_y, grid_x, 3] = np.sqrt(h)
             grid[grid_y, grid_x, 4] = 1.
             grid[grid_y, grid_x, label-20] = 1.
 
@@ -136,7 +133,6 @@ class VOCDatasetYOLOv1:
         # hue, brightness, saturation
         adjust_factor = tf.random.uniform((1, 1, 3), .5, 1.5)
         img_aug = tf.image.rgb_to_hsv(img_aug) * adjust_factor
-        img_aug = tf.clip_by_value(img_aug, 0., 255.)
         img_aug = tf.image.hsv_to_rgb(img_aug)
 
         # gauss noise
@@ -150,9 +146,6 @@ class VOCDatasetYOLOv1:
         if flip:
             img_aug = tf.image.flip_left_right(img_aug)
 
-        # # normalize
-        # img_aug /= 255.
-        # img_aug = (img_aug - self.mean) / self.std
         return tf.squeeze(img_aug)
     
     def make_example(self, img, bbox, label, aug=False):
@@ -173,7 +166,7 @@ class VOCDatasetYOLOv1:
         if aug:
             # 플립, 무작위 crop & resizing
             flip = np.random.randint(2)  # flip 여부
-            zoom = np.random.uniform(0., .2)  # 이미지 가로세로 잘라낼 비율
+            zoom = np.random.uniform(0., .1)  # 이미지 가로세로 잘라낼 비율
             shift_x, shift_y = np.random.uniform(-zoom, zoom, 2)  # crop 위치
             img = self.img_augmentation(img, flip, zoom, shift_x, shift_y)
             grid = self.get_grid(bbox.numpy(), label.numpy(), flip, zoom, shift_x, shift_y)

@@ -3,7 +3,7 @@ from utils import get_iou
 
 
 class YOLOv1Loss(tf.keras.losses.Loss):
-    def __init__(self, S=7, B=2,
+    def __init__(self, S=7, B=2, img_size=(448, 448),
                  lambda_coord=5., lambda_noobj=.5,
                  name='YOLO_loss'):
         """
@@ -22,7 +22,9 @@ class YOLOv1Loss(tf.keras.losses.Loss):
         self.B = B
         self.lambda_coord = lambda_coord
         self.lambda_noobj = lambda_noobj
-    
+        self.i = tf.Variable(0., trainable=False)
+
+    @tf.function
     def call(self, true, pred):
         """
         YOLO v1 loss
@@ -45,26 +47,34 @@ class YOLOv1Loss(tf.keras.losses.Loss):
 
         # responsibility
         obj_true = true_bbox[..., 4]
-        obj_1 = iou_one_hot * obj_true  # n, S, S, B
-        no_obj_1 = 1. - obj_true  # n, S, S
+        obj_1_ij = iou_one_hot * obj_true  # n, S, S, B
+        noobj_1 = 1. - obj_true  # n, S, S
 
-        # bbox center loss
-        xy, xy_hat = true_bbox[..., :2], pred_bbox[..., :2]
-        xy_loss = tf.reduce_sum(obj_1[..., None] * tf.square(xy-xy_hat), axis=[1, 2, 3, 4])
-
-        # bbox size loss
-        wh, wh_hat = true_bbox[..., 2:4], pred_bbox[..., 2:4]
-        wh_loss = tf.reduce_sum(obj_1[..., None] * tf.square(tf.sqrt(wh)-tf.sqrt(wh_hat)), axis=[1, 2, 3, 4])
+        # loss
+        # bbox coord loss
+        coord, coord_hat = true_bbox[..., :4], pred_bbox[..., :4]
+        coord_loss = tf.reduce_sum(obj_1_ij[..., None] * tf.square(coord-coord_hat), axis=[1, 2, 3, 4])
 
         # confidence loss
         conf_hat = pred_bbox[..., 4]
-        obj_loss = tf.reduce_sum(obj_1 * tf.square(1.-conf_hat), axis=[1, 2, 3])
-        no_obj_loss = tf.reduce_sum(no_obj_1 * tf.square(conf_hat), axis=[1, 2, 3])
+        obj_loss = tf.reduce_sum(obj_1_ij * tf.square(iou-conf_hat), axis=[1, 2, 3])
+        noobj_loss = tf.reduce_sum(noobj_1 * tf.square(conf_hat), axis=[1, 2, 3])
 
         # classification loss
         c, c_hat = true[..., -20:], pred[..., -20:]
-        c_loss = tf.reduce_sum(obj_true * tf.square(c-c_hat), axis=[1, 2, 3])
+        c_loss = tf.reduce_sum(obj_true * tf.square(c - c_hat), axis=[1, 2, 3])
 
-        loss = self.lambda_coord * (xy_loss + wh_loss) + obj_loss + self.lambda_noobj * no_obj_loss + c_loss
+        # total loss
+        loss = self.lambda_coord * coord_loss + obj_loss + self.lambda_noobj * noobj_loss + c_loss
+        #
+        # if self.i < 100:
+        #     tf.print(
+        #         self.i,
+        #         tf.reduce_mean(coord_loss),
+        #         tf.reduce_mean(obj_loss),
+        #         tf.reduce_mean(noobj_loss),
+        #         tf.reduce_mean(c_loss),
+        #     )
+        #     self.i.assign_add(1.)
 
         return tf.reduce_mean(loss)

@@ -59,23 +59,28 @@ def draw_predicted_bbox(pred, img):
     plt.show()
 
 
-def nms():
+def nms(pred):
     # TODO : non maximum suppression 작성
+    # pred (S, S, 5*B + 20)
     pass
 
 
 def get_iou(box_1, box_2, S=7, B=2):
     box_1 = tf.tile(box_1, [1, 1, 1, B, 1])
-    box_stack = tf.stack([box_1, box_2], axis=-1) # n, s, s, 2, 5, 2
+    box_stack = tf.stack([box_1, box_2], axis=-1)  # n, s, s, 2, 5, 2
 
-    inter_lt = tf.reduce_max(box_stack[..., :2, :]/S - box_stack[..., 2:4, :]/2, axis=-1)
-    inter_rb = tf.reduce_min(box_stack[..., :2, :]/S + box_stack[..., 2:4, :]/2, axis=-1)
-    inter_wh = tf.clip_by_value(inter_rb - inter_lt, 0., 1.) # n, s, s, 2, 2
+    xy = box_stack[..., :2, :]
+    wh = tf.square(box_stack[..., 2:4, :])
+    small_wh = tf.reduce_min(wh, axis=-1)
+
+    inter_lt = tf.reduce_max(xy/S - wh/2, axis=-1)
+    inter_rb = tf.reduce_min(xy/S + wh/2, axis=-1)
+    inter_wh = tf.clip_by_value(inter_rb - inter_lt, 0., small_wh)  # n, s, s, 2, 2
     intersection = tf.reduce_prod(inter_wh, axis=-1)
 
-    union = tf.reduce_sum(tf.reduce_prod(box_stack[..., 2:4, :], axis=-2), axis=-1) - intersection
+    union = tf.reduce_sum(tf.reduce_prod(wh, axis=-2), axis=-1) - intersection + 1e-10
 
-    return tf.clip_by_value(intersection / union, 0., 1.)
+    return tf.cast(tf.clip_by_value(intersection / union, 0., 1.), tf.float32)
 
 
 class WarmupCosineLRDecay(tf.keras.optimizers.schedules.LearningRateSchedule):
@@ -103,10 +108,11 @@ class WarmupCosineLRDecay(tf.keras.optimizers.schedules.LearningRateSchedule):
 
 
 class LRWarmup(tf.keras.optimizers.schedules.LearningRateSchedule):
-    def __init__(self, scheduler, step):
+    def __init__(self, scheduler, step, init_lr=0):
         super(LRWarmup, self).__init__()
-        assert step > 0, 'learning rate warm-up step must larger than zero.'
+        assert step > 0, 'learning rate warm-up step must be larger than zero.'
 
+        self.init_lr = init_lr
         self.scheduler = scheduler
         self.lr = self.scheduler(0)
         self.step = step
@@ -114,7 +120,7 @@ class LRWarmup(tf.keras.optimizers.schedules.LearningRateSchedule):
     @tf.function
     def __call__(self, steps):
         if tf.less_equal(steps, self.step):
-            return self.lr * (steps / self.step)
+            return self.init_lr + (self.lr-self.init_lr) * (steps / self.step)
         else:
             return self.scheduler(steps - self.step)
 
