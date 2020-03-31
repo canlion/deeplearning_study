@@ -11,7 +11,7 @@ import argparse
 from dataset import VOCDatasetYOLOv1
 from loss import YOLOv1Loss
 from utils import WarmupCosineLRDecay, LRWarmup
-from network import YoloV1MobilenetV2 as YoloV1
+from network import YoloV1 as YoloV1
 
 
 IN_MEAN = tf.constant([123.68, 116.779, 103.939], shape=(1, 1, 1, 3))
@@ -20,6 +20,7 @@ IN_STD = tf.constant([58.393, 57.12, 57.375], shape=(1, 1, 1, 3))
 
 @tf.function
 def normalization(img):
+    # return img / 255.
     return (img-IN_MEAN)/IN_STD
 
 
@@ -65,8 +66,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch', default=64, type=int, help='batch size.')
     # parser.add_argument('--init_lr', default=1e-3, type=float, help='initial learning rate.')
     parser.add_argument('--epochs', default=135, type=int, help='total training epochs.')
-    parser.add_argument('--lr_list', default=[1e-4, 1e-5, 1e-6], help='lr list', nargs='*')
-    parser.add_argument('--epochs_list', default=[10, 20], help='lr decay epochs.', nargs='*')
+    parser.add_argument('--lr_list', default=[1e-4, 1e-5, 1e-6], help='lr list', nargs='*', type=float)
+    parser.add_argument('--epochs_list', default=[75, 105], help='lr decay epochs.', nargs='*')
     parser.add_argument('--mode', choices=['normal', 'mixed_precision'], default='normal',
                         help='training mode, "normal" or "mixed_precision".')
     parser.add_argument('--warmup_start_lr', default=1e-5, type=float, help='init lr of warmup of learning rate.')
@@ -106,9 +107,8 @@ if __name__ == '__main__':
     # network
     model = YoloV1()
     model.build((args.batch, 448, 448, 3))
+    model.load_weights('backbone_w/min_loss_model_w')
     model.summary()
-    # model.load_weights('backbone_w/min_loss_model_w')
-
 
     # tensorboard
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")

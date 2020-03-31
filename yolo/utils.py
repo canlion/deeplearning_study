@@ -10,19 +10,25 @@ def draw_bbox(grid, img, S=7):
     
     h, w = img.shape[:2]
     obj_grid = np.array(np.where(grid[:, :, 4]==1.)).T
-    
+
+    edge_h, edge_w = img.shape[:2]
+    edge_h, edge_w = int(edge_h/S), int(edge_w/S)
+    for i in range(1, S):
+        cv2.line(img, (0, edge_h*i), (img.shape[1], edge_h*i), (255, 0, 0), 1)
+        cv2.line(img, (edge_w*i, 0), (edge_w*i, img.shape[0]), (255, 0, 0), 1)
+
     for y, x in obj_grid:
         cx, cy, bw, bh = grid[y, x, :4]
-        
         cx = int((cx + x) / S*w)
         cy = int((cy + y) / S*h)
-        bw = int(bw * w)
-        bh = int(bh * h)
+        bw = int(bw**2 * w)
+        bh = int(bh**2 * h)
+        print((cx-bw//2, cy-bh//2), (cx+bw//2, cy+bh//2))
         
         img = cv2.rectangle(img,
                             (cx-bw//2, cy-bh//2), (cx+bw//2, cy+bh//2),
                             (0, 255, 255), 2)
-    
+    plt.figure(figsize=(10, 10))
     plt.imshow(img)
     plt.show()
     
@@ -44,7 +50,8 @@ def draw_predicted_bbox(pred, img):
                 cx, cy, bw, bh = data[5:9]
                 C = data[9]
                 color = (0, 255, 0)
-                
+
+            bw, bh = bw**2, bh**2
             cx = int((cx+x)/S * w)
             cy = int((cy+y)/S * h)
             bw = int(bw*w)

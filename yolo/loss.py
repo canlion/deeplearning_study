@@ -3,7 +3,7 @@ from utils import get_iou
 
 
 class YOLOv1Loss(tf.keras.losses.Loss):
-    def __init__(self, S=7, B=2, img_size=(448, 448),
+    def __init__(self, S=7, B=2,
                  lambda_coord=5., lambda_noobj=.5,
                  name='YOLO_loss'):
         """
@@ -46,9 +46,9 @@ class YOLOv1Loss(tf.keras.losses.Loss):
         iou_one_hot = tf.one_hot(tf.argmax(iou, axis=-1), depth=self.B, axis=-1)
 
         # responsibility
-        obj_true = true_bbox[..., 4]
+        obj_true = true_bbox[..., 4]  # n, S, S, 1
         obj_1_ij = iou_one_hot * obj_true  # n, S, S, B
-        noobj_1 = 1. - obj_true  # n, S, S
+        noobj_1_ij = 1. - obj_true  # n, S, S, 1
 
         # loss
         # bbox coord loss
@@ -58,7 +58,8 @@ class YOLOv1Loss(tf.keras.losses.Loss):
         # confidence loss
         conf_hat = pred_bbox[..., 4]
         obj_loss = tf.reduce_sum(obj_1_ij * tf.square(iou-conf_hat), axis=[1, 2, 3])
-        noobj_loss = tf.reduce_sum(noobj_1 * tf.square(conf_hat), axis=[1, 2, 3])
+        # obj_loss = tf.reduce_sum(obj_1_ij * tf.square(1.-conf_hat), axis=[1, 2, 3])
+        noobj_loss = tf.reduce_sum(noobj_1_ij * tf.square(conf_hat), axis=[1, 2, 3])
 
         # classification loss
         c, c_hat = true[..., -20:], pred[..., -20:]
@@ -75,6 +76,6 @@ class YOLOv1Loss(tf.keras.losses.Loss):
         #         tf.reduce_mean(noobj_loss),
         #         tf.reduce_mean(c_loss),
         #     )
-        #     self.i.assign_add(1.)
+        #     # self.i.assign_add(1.)
 
         return tf.reduce_mean(loss)

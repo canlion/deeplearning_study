@@ -64,7 +64,7 @@ class YoloV1(K.Model):
             K.layers.Dense(4096, kernel_regularizer=REGULARIZER),
             K.layers.LeakyReLU(alpha=.1),
             K.layers.Dropout(.5),
-            K.layers.Dense(7*7*30, kernel_regularizer=REGULARIZER),
+            K.layers.Dense(7*7*30, kernel_regularizer=REGULARIZER, activation='linear'),
         ])
 
     def call(self, input_tensor, training=False):
@@ -90,8 +90,8 @@ class YoloV1MobilenetV2(K.Model):
         self.seq = K.Sequential([
             *conv2d_BN_LReLU(1024, 3, 1),
             *conv2d_BN_LReLU(1024, 3, 2),
-            *conv2d_BN_LReLU(1024, 3, 1),
-            *conv2d_BN_LReLU(1024, 3, 1),
+            *conv2d_BN_LReLU(512, 3, 1),
+            *conv2d_BN_LReLU(256, 3, 1),
             *conv2d_BN_LReLU(30, 1, 1),
             # K.layers.Flatten(),
             # K.layers.Dense(4096, kernel_regularizer=REGULARIZER),

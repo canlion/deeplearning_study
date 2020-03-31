@@ -27,6 +27,13 @@ class VOCDatasetYOLOv1:
         self.bbox_minimum = bbox_minimum
         self.aug = aug
 
+        self.cls_list = [
+            'aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
+            'bus', 'car', 'cat', 'chair', 'cow',
+            'diningtable', 'dog', 'horse', 'motorbike', 'person',
+            'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'
+        ]
+
     def set_dataset(self, valid_year, d_dir):
         """
         train 데이터셋과 validation 데이터셋 load.
@@ -83,7 +90,7 @@ class VOCDatasetYOLOv1:
             
             # 이미지 리사이징시에 바운딩박스도 같이 확장
             factor = 1. / (1. - 2. * zoom)
-            bbox = np.clip(bbox * factor, 0., 1. - 1e-4)
+            bbox = np.clip(bbox * factor, 0. + 1e-4, 1. - 1e-4)
             
             # 이미지 플립시에 바운딩박스 좌우 경계 교환
             if flip:
@@ -92,18 +99,19 @@ class VOCDatasetYOLOv1:
             w, h = bbox[3]-bbox[1], bbox[2]-bbox[0]
 
             # 바운딩박스 크기가 전체 이미지에 대해 설정한 비율보다 작다면 삭제함
-            if w < self.bbox_minimum or h < self.bbox_minimum:
-                continue
+            # if w < self.bbox_minimum or h < self.bbox_minimum:
+            #     continue
             
             # 바운딩박스 중심이 속하는 구역의 인덱스와 구역내에서의 상대적인 바운딩박스 중심 좌표
-            grid_x, cx = np.divmod((bbox[3]+bbox[1])/2, 1/self.S)
-            grid_y, cy = np.divmod((bbox[2]+bbox[0])/2, 1/self.S)
+            grid_x, cx = divmod((bbox[3]+bbox[1])/2, 1/self.S)
+            grid_y, cy = divmod((bbox[2]+bbox[0])/2, 1/self.S)
 
             grid_x, grid_y = int(grid_x), int(grid_y)
+            # tf.print(grid_x, grid_y, self.cls_list[label])
             
             # 차례로 바운딩박스 중심, 가로세로, 오브젝트존재여부, 클래스 one-hot
-            grid[grid_y, grid_x, 0] = cx
-            grid[grid_y, grid_x, 1] = cy
+            grid[grid_y, grid_x, 0] = cx * self.S
+            grid[grid_y, grid_x, 1] = cy * self.S
             grid[grid_y, grid_x, 2] = np.sqrt(w)
             grid[grid_y, grid_x, 3] = np.sqrt(h)
             grid[grid_y, grid_x, 4] = 1.
@@ -147,7 +155,7 @@ class VOCDatasetYOLOv1:
             img_aug = tf.image.flip_left_right(img_aug)
 
         return tf.squeeze(img_aug)
-    
+
     def make_example(self, img, bbox, label, aug=False):
         """
         데이터 example 생성 - 이미지 augmentation & label 생성
